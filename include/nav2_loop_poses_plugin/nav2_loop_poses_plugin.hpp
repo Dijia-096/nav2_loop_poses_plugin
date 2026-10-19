@@ -40,7 +40,7 @@ private:
   void halt() override;
   BT::NodeStatus tick() override;
 
-  // 判断机器人是否已贴近途经点 waypoint（仅半径判断）
+  // 先按半径判断，再判断 waypoint 是否位于车体后方（车体坐标 x < 0）。
   bool hasPassedWaypoint(
     const geometry_msgs::msg::PoseStamped & current,
     const geometry_msgs::msg::PoseStamped & waypoint) const;

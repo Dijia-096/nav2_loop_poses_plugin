@@ -1,6 +1,7 @@
 #include <string>
 #include <memory>
 #include <limits>
+#include <cmath>
 
 #include "nav_msgs/msg/path.hpp"
 #include "nav2_util/geometry_utils.hpp"
@@ -46,7 +47,17 @@ bool LoopPoses::hasPassedWaypoint(
   {
     return true;
   }
-  return false;
+
+  // current 与 waypoint 使用同一个全局坐标系；将位移投影到车体前向轴。
+  // 半径外的点只要位于车后方，也视为已通过，避免切弯后反复追点。
+  const auto & q = current.pose.orientation;
+  const double yaw = std::atan2(
+    2.0 * (q.w * q.z + q.x * q.y),
+    1.0 - 2.0 * (q.y * q.y + q.z * q.z));
+  const double dx = waypoint.pose.position.x - current.pose.position.x;
+  const double dy = waypoint.pose.position.y - current.pose.position.y;
+  const double x_in_robot = std::cos(yaw) * dx + std::sin(yaw) * dy;
+  return x_in_robot < 0.0;
 }
 
 BT::NodeStatus LoopPoses::tick()
@@ -80,7 +91,7 @@ BT::NodeStatus LoopPoses::tick()
 
   const bool keep_looping = (loop_count_ == 0) || (current_lap_ < loop_count_);
 
-  // 去掉已贴近的途经点：仅按半径判断。
+  // 去掉半径内或已位于车体后方的途经点。
   // 每 tick 最多切一整圈（original_goals_count_ 次），防止所有点都判定为已过时无限旋转。
   size_t removed = 0;
   while (all_goals_.size() > 1 && removed < original_goals_count_) {
